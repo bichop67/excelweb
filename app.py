@@ -1,6 +1,6 @@
 from flask import Flask, request, send_file, jsonify, render_template
 from flask_cors import CORS
-from openai import OpenAI
+import openai
 import pandas as pd
 import os
 import io
@@ -15,7 +15,7 @@ app = Flask(__name__)
 CORS(app)
 
 # Configuration OpenAI avec la clé API directement
-client = OpenAI(api_key="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")
+openai.api_key = "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"
 
 @app.route('/')
 def home():
@@ -32,7 +32,7 @@ def generate_excel():
 
         # Appel à GPT-4
         try:
-            response = client.chat.completions.create(
+            response = openai.ChatCompletion.create(
                 model="gpt-4",
                 messages=[
                     {"role": "system", "content": """Tu es un expert en création de tableaux Excel. 
