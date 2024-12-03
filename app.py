@@ -16,15 +16,16 @@ logger = logging.getLogger(__name__)
 app = Flask(__name__)
 CORS(app)
 
-# Configuration API Codeium
+# Configuration API
 API_KEY = "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"
-API_URL = "https://api.codeium.com/api/v1/chat/completions"
+API_URL = "https://api.proxyapi.ru/openai/v1/chat/completions"
 
 def make_api_request(prompt, max_retries=3):
     """Fonction pour faire une requête à l'API avec retry"""
     headers = {
         "Authorization": f"Bearer {API_KEY}",
         "Content-Type": "application/json",
+        "User-Agent": "Mozilla/5.0",
         "Accept": "application/json"
     }
     
@@ -37,32 +38,38 @@ def make_api_request(prompt, max_retries=3):
             {"role": "user", "content": prompt}
         ],
         "temperature": 0.7,
-        "stream": False
+        "max_tokens": 2000
     }
     
     for attempt in range(max_retries):
         try:
-            logger.debug(f"Tentative {attempt + 1} de connexion à l'API Codeium")
+            logger.debug(f"Tentative {attempt + 1} de connexion à l'API")
             response = requests.post(
                 API_URL, 
                 headers=headers, 
                 json=data,
-                timeout=30
+                timeout=60,
+                verify=True
             )
             
             logger.debug(f"Status code: {response.status_code}")
             logger.debug(f"Response headers: {response.headers}")
+            logger.debug(f"Response body: {response.text[:500]}")  # Log les premiers 500 caractères de la réponse
             
             if response.status_code == 429:  # Rate limit
                 wait_time = int(response.headers.get('Retry-After', 60))
                 logger.warning(f"Rate limit atteint, attente de {wait_time} secondes...")
                 time.sleep(wait_time)
                 continue
+            elif response.status_code == 401:
+                logger.error(f"Erreur d'authentification: {response.text}")
+                raise Exception("Erreur d'authentification avec l'API")
                 
             response.raise_for_status()
             return response.json()
             
         except requests.exceptions.RequestException as e:
+            logger.error(f"Erreur de requête: {str(e)}")
             if attempt == max_retries - 1:
                 raise Exception(f"Erreur API après {max_retries} tentatives: {str(e)}")
             
@@ -93,6 +100,8 @@ def generate_excel():
             error_msg = str(e)
             if "rate limit" in error_msg.lower():
                 return jsonify({"error": "Le service est temporairement surchargé. Veuillez réessayer dans quelques minutes."}), 429
+            if "Erreur d'authentification" in error_msg:
+                return jsonify({"error": "Erreur d'authentification avec l'API. Veuillez vérifier la configuration."}), 401
             return jsonify({"error": f"Erreur lors de l'appel à l'API: {error_msg}"}), 500
 
         # Conversion de la réponse JSON en DataFrame
