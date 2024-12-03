@@ -27,7 +27,14 @@ document.addEventListener('DOMContentLoaded', function() {
             });
 
             if (!response.ok) {
-                throw new Error(`Erreur HTTP: ${response.status}`);
+                const errorData = await response.json();
+                if (response.status === 429 || errorData.error.includes("rate limit")) {
+                    throw new Error("Limite d'utilisation de l'API atteinte. Veuillez réessayer dans quelques minutes.");
+                } else if (response.status === 500) {
+                    throw new Error(errorData.error || "Une erreur est survenue lors de la génération du fichier Excel.");
+                } else {
+                    throw new Error(`Erreur HTTP: ${response.status}`);
+                }
             }
 
             // Téléchargement du fichier
@@ -42,7 +49,7 @@ document.addEventListener('DOMContentLoaded', function() {
             a.remove();
 
         } catch (error) {
-            showError("Une erreur est survenue lors de la génération du fichier Excel. " + error.message);
+            showError(error.message);
         } finally {
             stopLoading();
         }
@@ -64,6 +71,7 @@ document.addEventListener('DOMContentLoaded', function() {
     function showError(message) {
         errorDiv.textContent = message;
         errorDiv.classList.remove('d-none');
+        errorDiv.scrollIntoView({ behavior: 'smooth', block: 'center' });
     }
 
     function hideError() {
