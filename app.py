@@ -3,7 +3,6 @@ from flask_cors import CORS
 import openai
 import pandas as pd
 import os
-from dotenv import load_dotenv
 import io
 import json
 import logging
@@ -12,15 +11,11 @@ import logging
 logging.basicConfig(level=logging.DEBUG)
 logger = logging.getLogger(__name__)
 
-load_dotenv()
-
 app = Flask(__name__)
 CORS(app)
 
-# Configuration OpenAI
-openai.api_key = os.getenv('OPENAI_API_KEY')
-if not openai.api_key:
-    logger.error("Clé API OpenAI non trouvée!")
+# Configuration OpenAI avec la clé API directement
+openai.api_key = "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"
 
 @app.route('/')
 def home():
