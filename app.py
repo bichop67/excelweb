@@ -1,6 +1,6 @@
 from flask import Flask, request, send_file, jsonify, render_template
 from flask_cors import CORS
-import openai
+import requests
 import pandas as pd
 import os
 import io
@@ -15,21 +15,38 @@ logger = logging.getLogger(__name__)
 app = Flask(__name__)
 CORS(app)
 
-# Configuration OpenAI avec la clé API directement
-openai.api_key = "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"
+# Configuration API
+API_KEY = "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"
+API_URL = "https://api.proxyapi.ru/openai/v1/chat/completions"
 
-def retry_on_rate_limit(func, max_retries=3):
-    """Fonction utilitaire pour réessayer en cas de limite de taux"""
+def make_api_request(prompt, max_retries=3):
+    """Fonction pour faire une requête à l'API avec retry"""
+    headers = {
+        "Authorization": f"Bearer {API_KEY}",
+        "Content-Type": "application/json"
+    }
+    
+    data = {
+        "model": "gpt-4",
+        "messages": [
+            {"role": "system", "content": """Tu es un expert en création de tableaux Excel. 
+             Génère uniquement un tableau de données au format JSON.
+             Format attendu: [{"colonne1": "valeur1", "colonne2": "valeur2"}, {...}]"""},
+            {"role": "user", "content": prompt}
+        ],
+        "temperature": 0.7
+    }
+    
     for attempt in range(max_retries):
         try:
-            return func()
-        except openai.error.RateLimitError as e:
+            response = requests.post(API_URL, headers=headers, json=data, timeout=30)
+            response.raise_for_status()
+            return response.json()
+        except requests.exceptions.RequestException as e:
             if attempt == max_retries - 1:
-                raise
-            logger.warning(f"Rate limit atteint, attente de 20 secondes... (tentative {attempt + 1}/{max_retries})")
-            time.sleep(20)
-        except Exception as e:
-            raise
+                raise Exception(f"Erreur API après {max_retries} tentatives: {str(e)}")
+            logger.warning(f"Tentative {attempt + 1}/{max_retries} échouée, nouvelle tentative dans 5 secondes...")
+            time.sleep(5)
 
 @app.route('/')
 def home():
@@ -44,33 +61,17 @@ def generate_excel():
         if not prompt:
             return jsonify({"error": "Prompt manquant"}), 400
 
-        # Appel à GPT-4 avec retry
-        def make_openai_call():
-            return openai.ChatCompletion.create(
-                model="gpt-4",
-                messages=[
-                    {"role": "system", "content": """Tu es un expert en création de tableaux Excel. 
-                     Génère uniquement un tableau de données au format JSON.
-                     Format attendu: [{"colonne1": "valeur1", "colonne2": "valeur2"}, {...}]"""},
-                    {"role": "user", "content": prompt}
-                ],
-                temperature=0.7
-            )
-
+        # Appel à l'API
         try:
-            response = retry_on_rate_limit(make_openai_call)
-            logger.info("Réponse GPT-4 reçue")
-        except openai.error.RateLimitError:
-            return jsonify({"error": "Service temporairement indisponible. Veuillez réessayer dans quelques minutes."}), 429
+            response_data = make_api_request(prompt)
+            logger.info("Réponse API reçue")
+            data = response_data['choices'][0]['message']['content']
         except Exception as e:
-            logger.error(f"Erreur OpenAI: {str(e)}")
-            return jsonify({"error": f"Erreur lors de l'appel à OpenAI: {str(e)}"}), 500
+            logger.error(f"Erreur API: {str(e)}")
+            return jsonify({"error": f"Erreur lors de l'appel à l'API: {str(e)}"}), 500
 
         # Conversion de la réponse JSON en DataFrame
         try:
-            data = response.choices[0].message['content']
-            logger.info(f"Données brutes: {data}")
-            
             # Nettoyage et parsing des données
             data = data.strip()
             if data.startswith("```") and data.endswith("```"):
