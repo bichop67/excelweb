@@ -3,72 +3,129 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>ExcelGPT - Générateur Excel IA</title>
-    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet">
-    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+    <title>ExcelGPT - Générateur de fichiers Excel</title>
+    <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
 </head>
-<body class="bg-dark text-light">
-    <div class="container-fluid">
-        <div class="row">
-            <!-- Guide d'utilisation -->
-            <div class="col-md-4 guide-section p-4">
-                <h3>📋 Guide d'utilisation</h3>
-                <div class="guide-content">
-                    <h5>1. 📊 Structure de base</h5>
-                    <ul>
-                        <li>Spécifiez le type de tableau</li>
-                        <li>Listez les colonnes</li>
-                        <li>Indiquez le nombre de lignes</li>
-                    </ul>
+<body class="bg-gray-100 min-h-screen">
+    <div class="container mx-auto px-4 py-8">
+        <div class="max-w-3xl mx-auto">
+            <!-- Header -->
+            <div class="text-center mb-10">
+                <h1 class="text-4xl font-bold text-gray-800 mb-2">ExcelGPT</h1>
+                <p class="text-gray-600">Générez des fichiers Excel intelligemment avec l'IA</p>
+            </div>
 
-                    <h5>2. 📈 Types de tableaux courants</h5>
-                    <ul>
-                        <li>Tableau de ventes</li>
-                        <li>Planning de projet</li>
-                        <li>Inventaire</li>
-                        <li>Budget</li>
-                        <li>Tableau de bord</li>
-                    </ul>
+            <!-- Main Form -->
+            <div class="bg-white rounded-lg shadow-lg p-6 mb-6">
+                <div class="mb-4">
+                    <label for="prompt" class="block text-gray-700 text-sm font-bold mb-2">
+                        Décrivez le fichier Excel que vous souhaitez générer
+                    </label>
+                    <textarea 
+                        id="prompt" 
+                        class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        rows="4"
+                        placeholder="Exemple: Crée un tableau de 10 employés avec leurs noms, âges, postes et salaires..."
+                    ></textarea>
+                </div>
+                <button 
+                    id="generateBtn"
+                    class="w-full bg-blue-500 hover:bg-blue-600 text-white font-bold py-3 px-4 rounded-lg transition duration-200 flex items-center justify-center"
+                >
+                    <span id="btnText">Générer le fichier Excel</span>
+                    <span id="btnLoader" class="hidden">
+                        <svg class="animate-spin h-5 w-5 ml-2" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                            <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                            <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                        </svg>
+                    </span>
+                </button>
+            </div>
 
-                    <h5>3. 💡 Exemple de prompt</h5>
-                    <p>Créé un tableau de ventes avec :</p>
-                    <ul>
-                        <li>Nom du produit</li>
-                        <li>Prix unitaire HT</li>
-                        <li>Quantité vendue</li>
-                        <li>Total HT (calculé)</li>
-                        <li>TVA (20%)</li>
-                        <li>Total TTC (calculé)</li>
-                    </ul>
+            <!-- Result Section -->
+            <div id="resultSection" class="hidden bg-white rounded-lg shadow-lg p-6">
+                <div class="text-center">
+                    <i class="fas fa-file-excel text-green-500 text-5xl mb-4"></i>
+                    <h3 class="text-xl font-bold text-gray-800 mb-2">Fichier Excel généré !</h3>
+                    <p class="text-gray-600 mb-4">Votre fichier est prêt à être téléchargé</p>
+                    <button id="downloadBtn" class="bg-green-500 hover:bg-green-600 text-white font-bold py-2 px-4 rounded-lg transition duration-200">
+                        <i class="fas fa-download mr-2"></i>Télécharger
+                    </button>
                 </div>
             </div>
 
-            <!-- Générateur -->
-            <div class="col-md-8 generator-section p-4">
-                <h2 class="text-center mb-4">🤖 Générateur de fichiers Excel avec GPT-4</h2>
-                
-                <div class="form-group mb-4">
-                    <label for="prompt" class="mb-2">📝 Entrez votre prompt :</label>
-                    <textarea 
-                        class="form-control bg-dark text-light" 
-                        id="prompt" 
-                        rows="6"
-                        placeholder="Exemple : Crée un tableau de ventes avec nom du produit, prix unitaire, quantité vendue et total des ventes. Ajoute 10 produits."></textarea>
-                </div>
-
-                <div class="text-center">
-                    <button id="generateBtn" class="btn btn-primary btn-lg">
-                        <span class="spinner-border spinner-border-sm d-none" role="status" aria-hidden="true"></span>
-                        Générer Excel
-                    </button>
-                </div>
-
-                <div id="error" class="alert alert-danger mt-3 d-none"></div>
+            <!-- Error Message -->
+            <div id="errorMessage" class="hidden bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded relative mt-4" role="alert">
+                <strong class="font-bold">Erreur!</strong>
+                <span class="block sm:inline" id="errorText"></span>
             </div>
         </div>
     </div>
 
-    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/js/bootstrap.bundle.min.js"></script>
-    <script src="{{ url_for('static', filename='script.js') }}"></script>
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            const generateBtn = document.getElementById('generateBtn');
+            const btnText = document.getElementById('btnText');
+            const btnLoader = document.getElementById('btnLoader');
+            const resultSection = document.getElementById('resultSection');
+            const downloadBtn = document.getElementById('downloadBtn');
+            const errorMessage = document.getElementById('errorMessage');
+            const errorText = document.getElementById('errorText');
+            let currentFilename = '';
+
+            generateBtn.addEventListener('click', async function() {
+                const prompt = document.getElementById('prompt').value;
+                if (!prompt) {
+                    showError('Veuillez entrer une description pour votre fichier Excel.');
+                    return;
+                }
+
+                // Show loading state
+                generateBtn.disabled = true;
+                btnText.textContent = 'Génération en cours...';
+                btnLoader.classList.remove('hidden');
+                resultSection.classList.add('hidden');
+                errorMessage.classList.add('hidden');
+
+                try {
+                    const response = await fetch('/generate', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                        },
+                        body: JSON.stringify({ prompt: prompt })
+                    });
+
+                    const data = await response.json();
+
+                    if (data.success) {
+                        currentFilename = data.filename;
+                        resultSection.classList.remove('hidden');
+                    } else {
+                        throw new Error(data.error || 'Une erreur est survenue lors de la génération du fichier.');
+                    }
+                } catch (error) {
+                    showError(error.message);
+                } finally {
+                    // Reset button state
+                    generateBtn.disabled = false;
+                    btnText.textContent = 'Générer le fichier Excel';
+                    btnLoader.classList.add('hidden');
+                }
+            });
+
+            downloadBtn.addEventListener('click', function() {
+                if (currentFilename) {
+                    window.location.href = `/download/${currentFilename}`;
+                }
+            });
+
+            function showError(message) {
+                errorText.textContent = message;
+                errorMessage.classList.remove('hidden');
+            }
+        });
+    </script>
 </body>
 </html>
