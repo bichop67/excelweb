@@ -17,13 +17,14 @@ CORS(app)
 
 # Configuration API
 API_KEY = "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"
-API_URL = "https://api.proxyapi.ru/openai/v1/chat/completions"
+API_URL = "https://api.openai.com/v1/chat/completions"
 
 def make_api_request(prompt, max_retries=3):
     """Fonction pour faire une requête à l'API avec retry"""
     headers = {
         "Authorization": f"Bearer {API_KEY}",
-        "Content-Type": "application/json"
+        "Content-Type": "application/json",
+        "OpenAI-Beta": "assistants=v1"
     }
     
     data = {
@@ -39,14 +40,30 @@ def make_api_request(prompt, max_retries=3):
     
     for attempt in range(max_retries):
         try:
-            response = requests.post(API_URL, headers=headers, json=data, timeout=30)
+            response = requests.post(
+                API_URL, 
+                headers=headers, 
+                json=data,
+                timeout=30,
+                verify=True  # Assure une connexion sécurisée
+            )
+            
+            if response.status_code == 429:  # Rate limit
+                wait_time = int(response.headers.get('Retry-After', 60))
+                logger.warning(f"Rate limit atteint, attente de {wait_time} secondes...")
+                time.sleep(wait_time)
+                continue
+                
             response.raise_for_status()
             return response.json()
+            
         except requests.exceptions.RequestException as e:
             if attempt == max_retries - 1:
                 raise Exception(f"Erreur API après {max_retries} tentatives: {str(e)}")
-            logger.warning(f"Tentative {attempt + 1}/{max_retries} échouée, nouvelle tentative dans 5 secondes...")
-            time.sleep(5)
+            
+            wait_time = min(2 ** attempt * 5, 60)  # Backoff exponentiel
+            logger.warning(f"Tentative {attempt + 1}/{max_retries} échouée, nouvelle tentative dans {wait_time} secondes...")
+            time.sleep(wait_time)
 
 @app.route('/')
 def home():
@@ -68,7 +85,10 @@ def generate_excel():
             data = response_data['choices'][0]['message']['content']
         except Exception as e:
             logger.error(f"Erreur API: {str(e)}")
-            return jsonify({"error": f"Erreur lors de l'appel à l'API: {str(e)}"}), 500
+            error_msg = str(e)
+            if "rate limit" in error_msg.lower():
+                return jsonify({"error": "Le service est temporairement surchargé. Veuillez réessayer dans quelques minutes."}), 429
+            return jsonify({"error": f"Erreur lors de l'appel à l'API: {error_msg}"}), 500
 
         # Conversion de la réponse JSON en DataFrame
         try:
