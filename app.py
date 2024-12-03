@@ -6,6 +6,7 @@ import os
 import io
 import json
 import logging
+import time
 
 # Configuration du logging
 logging.basicConfig(level=logging.DEBUG)
@@ -16,6 +17,19 @@ CORS(app)
 
 # Configuration OpenAI avec la clé API directement
 openai.api_key = "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"
+
+def retry_on_rate_limit(func, max_retries=3):
+    """Fonction utilitaire pour réessayer en cas de limite de taux"""
+    for attempt in range(max_retries):
+        try:
+            return func()
+        except openai.error.RateLimitError as e:
+            if attempt == max_retries - 1:
+                raise
+            logger.warning(f"Rate limit atteint, attente de 20 secondes... (tentative {attempt + 1}/{max_retries})")
+            time.sleep(20)
+        except Exception as e:
+            raise
 
 @app.route('/')
 def home():
@@ -30,9 +44,9 @@ def generate_excel():
         if not prompt:
             return jsonify({"error": "Prompt manquant"}), 400
 
-        # Appel à GPT-4
-        try:
-            response = openai.ChatCompletion.create(
+        # Appel à GPT-4 avec retry
+        def make_openai_call():
+            return openai.ChatCompletion.create(
                 model="gpt-4",
                 messages=[
                     {"role": "system", "content": """Tu es un expert en création de tableaux Excel. 
@@ -42,14 +56,19 @@ def generate_excel():
                 ],
                 temperature=0.7
             )
+
+        try:
+            response = retry_on_rate_limit(make_openai_call)
             logger.info("Réponse GPT-4 reçue")
+        except openai.error.RateLimitError:
+            return jsonify({"error": "Service temporairement indisponible. Veuillez réessayer dans quelques minutes."}), 429
         except Exception as e:
             logger.error(f"Erreur OpenAI: {str(e)}")
             return jsonify({"error": f"Erreur lors de l'appel à OpenAI: {str(e)}"}), 500
 
         # Conversion de la réponse JSON en DataFrame
         try:
-            data = response.choices[0].message.content
+            data = response.choices[0].message['content']
             logger.info(f"Données brutes: {data}")
             
             # Nettoyage et parsing des données
