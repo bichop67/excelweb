@@ -15,7 +15,11 @@ app = Flask(__name__)
 CORS(app)
 
 # Configuration OpenAI avec la clé API directement
-client = OpenAI(api_key="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")
+client = OpenAI(
+    api_key="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",
+    base_url="https://api.proxyapi.ru/openai/v1",
+    default_headers={"HTTP-REFERER": "https://your-app-domain.com"}
+)
 
 @app.route('/')
 def home():
