@@ -7,6 +7,10 @@ import io
 import json
 import logging
 import time
+from dotenv import load_dotenv
+
+# Chargement des variables d'environnement
+load_dotenv()
 
 # Configuration du logging
 logging.basicConfig(level=logging.DEBUG)
@@ -16,15 +20,17 @@ app = Flask(__name__)
 CORS(app)
 
 # Configuration API
-API_KEY = "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"
+API_KEY = os.getenv('OPENAI_API_KEY')
+if not API_KEY:
+    raise ValueError("La clé API OpenAI n'est pas configurée. Veuillez définir OPENAI_API_KEY dans le fichier .env")
+
 API_URL = "https://api.openai.com/v1/chat/completions"
 
 def make_api_request(prompt, max_retries=3):
     """Fonction pour faire une requête à l'API avec retry"""
     headers = {
         "Authorization": f"Bearer {API_KEY}",
-        "Content-Type": "application/json",
-        "OpenAI-Beta": "assistants=v1"
+        "Content-Type": "application/json"
     }
     
     data = {
@@ -44,8 +50,7 @@ def make_api_request(prompt, max_retries=3):
                 API_URL, 
                 headers=headers, 
                 json=data,
-                timeout=30,
-                verify=True  # Assure une connexion sécurisée
+                timeout=30
             )
             
             if response.status_code == 429:  # Rate limit
@@ -58,6 +63,8 @@ def make_api_request(prompt, max_retries=3):
             return response.json()
             
         except requests.exceptions.RequestException as e:
+            if response.status_code == 401:
+                raise Exception("Clé API invalide ou expirée. Veuillez vérifier votre clé API OpenAI.")
             if attempt == max_retries - 1:
                 raise Exception(f"Erreur API après {max_retries} tentatives: {str(e)}")
             
@@ -88,6 +95,8 @@ def generate_excel():
             error_msg = str(e)
             if "rate limit" in error_msg.lower():
                 return jsonify({"error": "Le service est temporairement surchargé. Veuillez réessayer dans quelques minutes."}), 429
+            if "Clé API invalide" in error_msg:
+                return jsonify({"error": "Erreur de configuration : Clé API OpenAI invalide"}), 401
             return jsonify({"error": f"Erreur lors de l'appel à l'API: {error_msg}"}), 500
 
         # Conversion de la réponse JSON en DataFrame
