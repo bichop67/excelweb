@@ -21,6 +21,9 @@ CORS(app)
 
 # Configuration API
 API_KEY = os.getenv('OPENAI_API_KEY')
+logger.info(f"API Key chargée: {'Oui' if API_KEY else 'Non'}")
+logger.info(f"Premiers caractères de la clé API: {API_KEY[:7]}..." if API_KEY else "Pas de clé API")
+
 if not API_KEY:
     raise ValueError("La clé API OpenAI n'est pas configurée. Veuillez définir OPENAI_API_KEY dans le fichier .env")
 
@@ -32,6 +35,8 @@ def make_api_request(prompt, max_retries=3):
         "Authorization": f"Bearer {API_KEY}",
         "Content-Type": "application/json"
     }
+    
+    logger.debug(f"Headers de la requête: {headers}")
     
     data = {
         "model": "gpt-4",
@@ -46,6 +51,7 @@ def make_api_request(prompt, max_retries=3):
     
     for attempt in range(max_retries):
         try:
+            logger.debug(f"Tentative {attempt + 1} de connexion à l'API OpenAI")
             response = requests.post(
                 API_URL, 
                 headers=headers, 
@@ -53,18 +59,23 @@ def make_api_request(prompt, max_retries=3):
                 timeout=30
             )
             
+            logger.debug(f"Status code: {response.status_code}")
+            logger.debug(f"Response headers: {response.headers}")
+            
             if response.status_code == 429:  # Rate limit
                 wait_time = int(response.headers.get('Retry-After', 60))
                 logger.warning(f"Rate limit atteint, attente de {wait_time} secondes...")
                 time.sleep(wait_time)
                 continue
+            elif response.status_code == 401:
+                error_text = response.text
+                logger.error(f"Erreur d'authentification: {error_text}")
+                raise Exception(f"Clé API invalide ou expirée. Détails: {error_text}")
                 
             response.raise_for_status()
             return response.json()
             
         except requests.exceptions.RequestException as e:
-            if response.status_code == 401:
-                raise Exception("Clé API invalide ou expirée. Veuillez vérifier votre clé API OpenAI.")
             if attempt == max_retries - 1:
                 raise Exception(f"Erreur API après {max_retries} tentatives: {str(e)}")
             
@@ -96,7 +107,7 @@ def generate_excel():
             if "rate limit" in error_msg.lower():
                 return jsonify({"error": "Le service est temporairement surchargé. Veuillez réessayer dans quelques minutes."}), 429
             if "Clé API invalide" in error_msg:
-                return jsonify({"error": "Erreur de configuration : Clé API OpenAI invalide"}), 401
+                return jsonify({"error": "Erreur de configuration : Clé API OpenAI invalide ou expirée. Veuillez vérifier votre clé API."}), 401
             return jsonify({"error": f"Erreur lors de l'appel à l'API: {error_msg}"}), 500
 
         # Conversion de la réponse JSON en DataFrame
