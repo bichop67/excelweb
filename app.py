@@ -1,13 +1,12 @@
 from flask import Flask, request, send_file, jsonify, render_template
 from flask_cors import CORS
-import requests
+import openai
 import pandas as pd
 import os
 import io
 import json
 import logging
 import time
-from dotenv import load_dotenv
 
 # Configuration du logging
 logging.basicConfig(level=logging.DEBUG)
@@ -16,64 +15,49 @@ logger = logging.getLogger(__name__)
 app = Flask(__name__)
 CORS(app)
 
-# Configuration API
-API_KEY = "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"
-API_URL = "https://api.proxyapi.ru/openai/v1/chat/completions"
+# Configuration API OpenAI
+openai.api_key = "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"
+openai.api_base = "https://api.openai.com/v1"
+openai.api_type = "open_ai"
+openai.api_version = None
 
 def make_api_request(prompt, max_retries=3):
     """Fonction pour faire une requête à l'API avec retry"""
-    headers = {
-        "Authorization": f"Bearer {API_KEY}",
-        "Content-Type": "application/json",
-        "User-Agent": "Mozilla/5.0",
-        "Accept": "application/json"
-    }
-    
-    data = {
-        "model": "gpt-4",
-        "messages": [
-            {"role": "system", "content": """Tu es un expert en création de tableaux Excel. 
-             Génère uniquement un tableau de données au format JSON.
-             Format attendu: [{"colonne1": "valeur1", "colonne2": "valeur2"}, {...}]"""},
-            {"role": "user", "content": prompt}
-        ],
-        "temperature": 0.7,
-        "max_tokens": 2000
-    }
-    
     for attempt in range(max_retries):
         try:
-            logger.debug(f"Tentative {attempt + 1} de connexion à l'API")
-            response = requests.post(
-                API_URL, 
-                headers=headers, 
-                json=data,
-                timeout=60,
-                verify=True
+            logger.debug(f"Tentative {attempt + 1} de connexion à l'API OpenAI")
+            
+            response = openai.ChatCompletion.create(
+                model="gpt-4",
+                messages=[
+                    {"role": "system", "content": """Tu es un expert en création de tableaux Excel. 
+                     Génère uniquement un tableau de données au format JSON.
+                     Format attendu: [{"colonne1": "valeur1", "colonne2": "valeur2"}, {...}]"""},
+                    {"role": "user", "content": prompt}
+                ],
+                temperature=0.7,
+                max_tokens=2000
             )
             
-            logger.debug(f"Status code: {response.status_code}")
-            logger.debug(f"Response headers: {response.headers}")
-            logger.debug(f"Response body: {response.text[:500]}")  # Log les premiers 500 caractères de la réponse
+            logger.debug("Réponse reçue de l'API")
+            return response
             
-            if response.status_code == 429:  # Rate limit
-                wait_time = int(response.headers.get('Retry-After', 60))
-                logger.warning(f"Rate limit atteint, attente de {wait_time} secondes...")
-                time.sleep(wait_time)
-                continue
-            elif response.status_code == 401:
-                logger.error(f"Erreur d'authentification: {response.text}")
-                raise Exception("Erreur d'authentification avec l'API")
-                
-            response.raise_for_status()
-            return response.json()
+        except openai.error.RateLimitError as e:
+            if attempt == max_retries - 1:
+                raise
+            wait_time = int(getattr(e, 'retry_after', 60))
+            logger.warning(f"Rate limit atteint, attente de {wait_time} secondes...")
+            time.sleep(wait_time)
             
-        except requests.exceptions.RequestException as e:
-            logger.error(f"Erreur de requête: {str(e)}")
+        except openai.error.AuthenticationError as e:
+            logger.error(f"Erreur d'authentification OpenAI: {str(e)}")
+            raise Exception(f"Erreur d'authentification OpenAI: {str(e)}")
+            
+        except Exception as e:
             if attempt == max_retries - 1:
                 raise Exception(f"Erreur API après {max_retries} tentatives: {str(e)}")
             
-            wait_time = min(2 ** attempt * 5, 60)  # Backoff exponentiel
+            wait_time = min(2 ** attempt * 5, 60)
             logger.warning(f"Tentative {attempt + 1}/{max_retries} échouée, nouvelle tentative dans {wait_time} secondes...")
             time.sleep(wait_time)
 
@@ -92,15 +76,15 @@ def generate_excel():
 
         # Appel à l'API
         try:
-            response_data = make_api_request(prompt)
+            response = make_api_request(prompt)
             logger.info("Réponse API reçue")
-            data = response_data['choices'][0]['message']['content']
+            data = response['choices'][0]['message']['content']
         except Exception as e:
             logger.error(f"Erreur API: {str(e)}")
             error_msg = str(e)
             if "rate limit" in error_msg.lower():
                 return jsonify({"error": "Le service est temporairement surchargé. Veuillez réessayer dans quelques minutes."}), 429
-            if "Erreur d'authentification" in error_msg:
+            if "authentication" in error_msg.lower():
                 return jsonify({"error": "Erreur d'authentification avec l'API. Veuillez vérifier la configuration."}), 401
             return jsonify({"error": f"Erreur lors de l'appel à l'API: {error_msg}"}), 500
 
