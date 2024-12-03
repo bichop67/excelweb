@@ -16,7 +16,7 @@ app = Flask(__name__)
 CORS(app)
 
 # Configuration OpenAI avec la clé API directement
-openai.api_key = "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"
+openai.api_key = "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"
 
 def retry_on_rate_limit(func, max_retries=3):
     """Fonction utilitaire pour réessayer en cas de limite de taux"""
